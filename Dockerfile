@@ -1,46 +1,42 @@
-# Base image
-FROM php:8.2-fpm-alpine
+# Use an official PHP runtime as a parent image
+FROM php:8.3-fpm
 
-# Install dependencies
-RUN apk add --no-cache \
-  curl \
-  git \
-  vim \
-  openssl \
-  pcre \
-  libpng-dev \
-  libjpeg-turbo-dev \
-  freetype-dev \
-  libzip-dev \
-  zlib-dev \
-  php-cli \
-  php-phar
+# Set working directory
+WORKDIR /var/www
 
-# Install and enable PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install gd zip
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip
+
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 # Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Verify Composer installation
-RUN composer --version
+# Copy existing application directory contents
+COPY . /var/www
 
-# Copy composer.json and lock file
-COPY composer.json composer.lock ./
+# Copy existing application directory permissions
+COPY --chown=www-data:www-data . /var/www
 
-# Install project dependencies
+# Change current user to www
+USER www-data
+
+# Install dependencies
 RUN composer install --no-interaction --optimize-autoloader
 
-# Copy project files
-COPY . .
-
-# Set environment variables
-ENV APP_ENV development
-ENV APP_DEBUG 1
-
-# Expose the container's port
-EXPOSE 8000
-
-# Run the application
-CMD ["php", "artisan", "serve", "--host=0.0.0.0"]
+# Expose port 9000 and start php-fpm server
+EXPOSE 9000
+CMD ["php-fpm"]
